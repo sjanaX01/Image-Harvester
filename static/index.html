@@ -37,6 +37,12 @@
                 <button class="view-tab" onclick="switchView('rawdata', this)">Raw Data</button>
             </div>
             <span class="badge" style="margin-left:10px;">v3.0</span>
+            <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle dark mode">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+            </button>
         </header>
 
         <!-- SIDEBAR -->
@@ -101,6 +107,8 @@
             </div>
 
             <div class="divider"></div>
+
+            <div class="warn-msg" id="warnMsg"></div>
 
             <div style="display:flex; flex-direction:column; gap:7px;">
                 <button class="btn btn-primary" id="startBtn" onclick="startScrape()">
@@ -243,7 +251,7 @@
                     </div>
                     <div class="graph-legend">
                         <div class="legend-item">
-                            <div class="legend-dot" style="background:#0a0a0a;"></div>Root
+                            <div class="legend-dot" style="background:var(--ink);"></div>Root
                         </div>
                         <div class="legend-item">
                             <div class="legend-dot" style="background:#888;border:1.5px solid #555;"></div>Pending
@@ -299,7 +307,7 @@
             <!-- RAW DATA PANEL -->
             <div class="panel hidden" id="panelRawData">
                 <div class="rawdata-wrap">
-                    <div class="gallery-header">
+                    <div class="rawdata-toolbar">
                         <div class="gallery-title">Raw Data</div>
                         <div style="display:flex; align-items:center; gap:8px;">
                             <button class="sel-btn" id="rawLiveToggle" onclick="toggleRawLive()">● Live Feed</button>

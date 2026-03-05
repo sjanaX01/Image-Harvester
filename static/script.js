@@ -16,6 +16,56 @@ let rawLiveMode = false;
 let lastRawPages = {};
 let lastCrawlEvents = [];
 
+// ── THEME ──
+function toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    updateThemeIcon();
+    updateGraphRootColor();
+}
+
+function updateThemeIcon() {
+    const btn = document.getElementById('themeBtn');
+    if (!btn) return;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.innerHTML = isDark
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
+        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+}
+
+function updateGraphRootColor() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    NODE_COLORS.root = isDark ? '#e0dcd4' : '#0a0a0a';
+    // Re-color existing root nodes
+    d3.selectAll('.nodes g.node circle').each(function (d) {
+        if (d && d.depth === 0) d3.select(this).attr('fill', NODE_COLORS.root);
+    });
+}
+
+// Apply saved theme on load
+(function () {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    document.addEventListener('DOMContentLoaded', () => { updateThemeIcon(); updateGraphRootColor(); });
+})();
+
+// ── WARNING ──
+let warnTimer = null;
+function showWarn(msg, duration) {
+    const el = document.getElementById('warnMsg');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('vis');
+    clearTimeout(warnTimer);
+    if (duration) warnTimer = setTimeout(() => el.classList.remove('vis'), duration);
+}
+function hideWarn() {
+    const el = document.getElementById('warnMsg');
+    if (el) el.classList.remove('vis');
+}
+
 // ── VIEW SWITCHING ──
 function switchView(v, el) {
     currentView = v;
@@ -47,12 +97,16 @@ function toggleOption(which) {
         exhaustAll = !exhaustAll;
         document.getElementById('exhaustToggle').classList.toggle('on', exhaustAll);
         updateDepthSection();
+        if (exhaustAll) showWarn('⚠ Exhaust All ignores depth — crawl size depends on Max Pages.', 5000);
+        else hideWarn();
     } else if (which === 'fullres') {
         detectFullres = !detectFullres;
         document.getElementById('fullresToggle').classList.toggle('on', detectFullres);
     } else if (which === 'domain') {
         sameDomainOnly = !sameDomainOnly;
         document.getElementById('domainToggle').classList.toggle('on', sameDomainOnly);
+        if (!sameDomainOnly) showWarn('⚠ Cross-domain scraping may discover a very large number of links.', 5000);
+        else hideWarn();
     }
 }
 
@@ -594,23 +648,31 @@ function toggleLog(panelId) {
     }
 }
 
-// Resizable logs
+// Resizable logs (smooth, no lag)
 function initLogResize(handleId, panelId) {
     const handle = document.getElementById(handleId);
     const panel = document.getElementById(panelId);
     if (!handle || !panel) return;
 
-    let startY, startH;
+    let startY, startH, rafId;
     handle.addEventListener('mousedown', (e) => {
         e.preventDefault();
         startY = e.clientY;
         startH = panel.offsetHeight;
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'ns-resize';
         const onMove = (e2) => {
-            const diff = startY - e2.clientY;
-            const newH = Math.max(60, Math.min(500, startH + diff));
-            panel.style.height = newH + 'px';
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                const diff = startY - e2.clientY;
+                const newH = Math.max(60, Math.min(500, startH + diff));
+                panel.style.height = newH + 'px';
+            });
         };
         const onUp = () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
         };
@@ -625,6 +687,10 @@ let lastGraphData = { nodes: [], edges: [] };
 let graphNeedsRender = false, nodeMap = {};
 
 const NODE_COLORS = { root: '#0a0a0a', pending: '#c8c4bc', scraping: '#b06010', done: '#1f7a4a', error: '#b03020' };
+
+function rootNodeColor() {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? '#e0dcd4' : '#0a0a0a';
+}
 
 function resetGraphState() {
     simulation = null; nodeMap = {};
@@ -699,7 +765,7 @@ function renderGraph(data) {
 
     const allNodes = nodeEnter.merge(nodeSel);
     allNodes.select('circle')
-        .attr('fill', d => d.depth === 0 ? NODE_COLORS.root : NODE_COLORS[d.status] || NODE_COLORS.pending)
+        .attr('fill', d => d.depth === 0 ? rootNodeColor() : NODE_COLORS[d.status] || NODE_COLORS.pending)
         .attr('stroke', d => d.depth === 0 ? 'none' : 'rgba(255,255,255,0.4)').attr('stroke-width', 1.5);
     allNodes.select('text').text(d => d.label);
 
