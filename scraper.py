@@ -55,6 +55,7 @@ class ScrapeConfig:
     request_timeout: int = 15
     request_delay: float = 0.2
     detect_fullres: bool = False
+    same_domain_only: bool = True
 
 
 @dataclass
@@ -155,7 +156,7 @@ class ImageScraper:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https", ""):
             return False
-        if not self._is_same_domain(url):
+        if self.config.same_domain_only and not self._is_same_domain(url):
             return False
         skip_extensions = {
             ".pdf", ".doc", ".docx", ".xls", ".xlsx",
@@ -605,15 +606,27 @@ class ImageScraper:
                 continue
             if not self._matches_format_filter(img_url):
                 continue
+            # Filter images by domain when same_domain_only is enabled
+            if self.config.same_domain_only and not self._is_same_domain(img_url):
+                continue
 
             is_thumb = img_data["is_thumbnail"]
             fullres_url = img_data.get("fullres_url", "")
+
+            # Filter fullres URL by domain too
+            if fullres_url and self.config.same_domain_only and not self._is_same_domain(fullres_url):
+                fullres_url = ""
+                is_thumb = False
 
             # ── Smart Full-Res Resolution ──
             # When detect_fullres is ON and this image hasn't already been
             # identified as a full-res image, try to find its full-res version.
             if self.config.detect_fullres and not fullres_url and not is_thumb:
                 resolved = await self._resolve_fullres(session, img_url)
+                if resolved and resolved != img_url and resolved not in self.image_urls:
+                    # Skip if full-res is on a different domain and domain lock is on
+                    if self.config.same_domain_only and not self._is_same_domain(resolved):
+                        resolved = None
                 if resolved and resolved != img_url and resolved not in self.image_urls:
                     # Mark this image as a thumbnail, add the resolved full-res
                     is_thumb = True

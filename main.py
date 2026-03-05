@@ -37,6 +37,7 @@ async def start_scrape(request: Request):
     follow_links = data.get("follow_links", True)
     exhaust_all = data.get("exhaust_all", False)
     detect_fullres = data.get("detect_fullres", False)
+    same_domain_only = data.get("same_domain_only", True)
 
     config = ScrapeConfig(
         start_url=url,
@@ -45,6 +46,7 @@ async def start_scrape(request: Request):
         follow_links=follow_links,
         exhaust_all=exhaust_all,
         detect_fullres=detect_fullres,
+        same_domain_only=same_domain_only,
     )
 
     job_id = str(uuid.uuid4())[:8]

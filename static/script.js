@@ -6,6 +6,7 @@ let currentView = 'gallery';
 let followLinks = true;
 let exhaustAll = false;
 let detectFullres = false;
+let sameDomainOnly = true;
 let selectedImages = new Set();
 let allSelectMode = false;
 let allImageDetails = [];
@@ -46,6 +47,9 @@ function toggleOption(which) {
     } else if (which === 'fullres') {
         detectFullres = !detectFullres;
         document.getElementById('fullresToggle').classList.toggle('on', detectFullres);
+    } else if (which === 'domain') {
+        sameDomainOnly = !sameDomainOnly;
+        document.getElementById('domainToggle').classList.toggle('on', sameDomainOnly);
     }
 }
 
@@ -105,7 +109,7 @@ async function startScrape() {
         body: JSON.stringify({
             url, max_depth: maxDepth, max_pages: maxPages,
             follow_links: followLinks, exhaust_all: exhaustAll,
-            detect_fullres: detectFullres,
+            detect_fullres: detectFullres, same_domain_only: sameDomainOnly,
         })
     });
     const data = await res.json();
