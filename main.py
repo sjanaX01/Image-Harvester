@@ -129,6 +129,8 @@ async def get_status(job_id: str):
         "crawl_edges": crawl_edges,
         "queue_urls": queue_urls,
         "zip_progress": scraper.zip_progress,
+        "raw_pages": scraper.raw_pages,
+        "crawl_events": scraper.crawl_events[-200:],
     }
 
 

@@ -34,6 +34,7 @@
                 <button class="view-tab active" onclick="switchView('gallery', this)">Gallery</button>
                 <button class="view-tab" onclick="switchView('graph', this)">Crawl Graph</button>
                 <button class="view-tab" onclick="switchView('queue', this)">Queue</button>
+                <button class="view-tab" onclick="switchView('rawdata', this)">Raw Data</button>
             </div>
             <span class="badge" style="margin-left:10px;">v3.0</span>
         </header>
@@ -292,6 +293,31 @@
                         <span class="log-toggle-icon" onclick="toggleLog('logPanel3')"></span>
                     </div>
                     <div class="log-body" id="logBody3"></div>
+                </div>
+            </div>
+
+            <!-- RAW DATA PANEL -->
+            <div class="panel hidden" id="panelRawData">
+                <div class="rawdata-wrap">
+                    <div class="gallery-header">
+                        <div class="gallery-title">Raw Data</div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <button class="sel-btn" id="rawLiveToggle" onclick="toggleRawLive()">● Live Feed</button>
+                            <select class="raw-page-select" id="rawPageSelect" onchange="renderRawPage(this.value)">
+                                <option value="">Select a page…</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="rawDataContent" class="rawdata-content">
+                        <div class="empty-state" id="rawEmpty">
+                            <div class="big-icon">{}</div>
+                            <p>Raw data will appear after scraping starts</p>
+                        </div>
+                        <!-- Page Data View -->
+                        <div id="rawPageView" style="display:none;"></div>
+                        <!-- Live Feed View -->
+                        <div id="rawLiveView" style="display:none;"></div>
+                    </div>
                 </div>
             </div>
 

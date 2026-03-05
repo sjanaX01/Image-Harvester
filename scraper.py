@@ -3,6 +3,7 @@ import hashlib
 import io
 import os
 import re
+import time
 import zipfile
 from dataclasses import dataclass, field
 from typing import Callable, Optional
@@ -110,10 +111,68 @@ class ImageScraper:
         # Zip progress
         self.zip_progress: dict = {"status": "idle", "current": 0, "total": 0, "filename": ""}
 
+        # Raw data & crawl events
+        self.raw_pages: dict[str, dict] = {}   # url -> page raw data
+        self.crawl_events: list[dict] = []     # live categorized events
+
     def _log(self, msg: str):
         self.activity_log.append(msg)
         if len(self.activity_log) > 200:
             self.activity_log = self.activity_log[-150:]
+
+    def _add_event(self, event_type: str, data: dict):
+        """Add a categorized crawl event for the raw data live stream."""
+        event = {"type": event_type, "ts": time.time(), **data}
+        self.crawl_events.append(event)
+        if len(self.crawl_events) > 2000:
+            self.crawl_events = self.crawl_events[-1500:]
+
+    def _extract_raw_data(self, soup: BeautifulSoup, page_url: str, html: str):
+        """Extract structured raw data from a page for the Raw Data panel."""
+        # Title
+        title_tag = soup.find("title")
+        title = title_tag.get_text(strip=True) if title_tag else ""
+
+        # Meta tags
+        metas = []
+        for m in soup.find_all("meta"):
+            name = m.get("name") or m.get("property") or m.get("http-equiv") or ""
+            content = m.get("content", "")
+            if name:
+                metas.append({"name": name, "content": content[:200]})
+
+        # All links
+        all_links = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if href and not href.startswith(("#", "javascript:", "mailto:", "tel:")):
+                full = urljoin(page_url, href)
+                all_links.append({
+                    "text": a.get_text(strip=True)[:60],
+                    "href": full,
+                    "internal": self._is_same_domain(full),
+                })
+
+        # Scripts
+        scripts = [s["src"] for s in soup.find_all("script", src=True)]
+
+        # Stylesheets
+        styles = [s["href"] for s in soup.find_all("link", rel="stylesheet") if s.get("href")]
+
+        # Image tag count (raw, before filtering)
+        img_tag_count = len(soup.find_all("img"))
+
+        self.raw_pages[page_url] = {
+            "url": page_url,
+            "title": title,
+            "meta_tags": metas[:30],
+            "links": all_links[:150],
+            "scripts": scripts[:30],
+            "stylesheets": styles[:15],
+            "img_tag_count": img_tag_count,
+            "html_length": len(html),
+            "html_snippet": html[:2000],
+        }
 
     def _make_node_id(self) -> str:
         self._node_counter += 1
@@ -596,9 +655,17 @@ class ImageScraper:
 
         soup = BeautifulSoup(html, "lxml")
 
+        # Extract raw page data
+        self._extract_raw_data(soup, url, html)
+
         # Extract images
         images_before = len(self.images)
         raw_images = self._extract_image_urls(soup, url)
+
+        self._add_event("page_start", {
+            "url": url, "depth": depth,
+            "title": self.raw_pages.get(url, {}).get("title", ""),
+        })
 
         for img_data in raw_images:
             img_url = img_data["url"]
@@ -675,6 +742,12 @@ class ImageScraper:
 
         self._log(f"✓ Scraped {url} — {images_found} images")
 
+        self._add_event("page_done", {
+            "url": url, "depth": depth,
+            "images_found": images_found,
+            "total_images": len(self.images),
+        })
+
         # Extract links — always extract to show in graph/queue, even if not following
         page_links = self._extract_page_links(soup, url)
         parent_id = node.id if node else ""
@@ -701,7 +774,13 @@ class ImageScraper:
                         self.progress.queue_size = self.queue.qsize()
 
         if page_links:
+            new_queued = sum(1 for q in self.queue_urls if q["status"] == "queued")
             self._log(f"  Found {len(page_links)} links on page")
+            self._add_event("links_found", {
+                "url": url, "count": len(page_links),
+                "queued": new_queued,
+                "links": [l for l in page_links[:20]],
+            })
 
     async def run(self):
         self.progress.status = "running"
