@@ -1,0 +1,56 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --ink: #0a0a0a;
+    --ink-soft: #3a3a3a;
+    --ink-muted: #888;
+    --bg: #f4f1eb;
+    --bg-card: #faf8f4;
+    --accent-glow: rgba(26, 26, 26, 0.08);
+    --border: #d8d4cc;
+    --green: #1f7a4a;
+    --red: #b03020;
+    --amber: #b06010;
+    --blue: #1a4a7a;
+}
+
+[data-theme="dark"] {
+    --ink: #e0dcd4;
+    --ink-soft: #b0aba0;
+    --ink-muted: #666;
+    --bg: #141414;
+    --bg-card: #1c1c1c;
+    --accent-glow: rgba(255, 255, 255, 0.05);
+    --border: #2a2a2a;
+    --green: #4ade80;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --blue: #60a5fa;
+}
+
+[data-theme="dark"] .logo-mark { background: var(--ink); }
+[data-theme="dark"] .logo-mark svg rect { fill: var(--bg); }
+[data-theme="dark"] .btn-primary:hover:not(:disabled) { background: #ccc; }
+[data-theme="dark"] .sel-btn-dl:hover { background: #ccc; color: var(--bg); }
+[data-theme="dark"] .dl-dropdown { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
+[data-theme="dark"] .img-detail-overlay { background: rgba(0, 0, 0, 0.9); }
+[data-theme="dark"] .zip-overlay { background: rgba(0, 0, 0, 0.75); }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #444; }
+[data-theme="dark"] .log-panel { border-top-color: rgba(255, 255, 255, 0.1); background: #111720; }
+[data-theme="dark"] .log-resize-handle:hover { background: rgba(255, 255, 255, 0.12); }
+
+html,
+body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+}
