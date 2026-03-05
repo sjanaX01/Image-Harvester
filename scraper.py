@@ -408,7 +408,7 @@ class ImageScraper:
         try:
             timeout = aiohttp.ClientTimeout(total=6)
             async with session.head(
-                url, timeout=timeout, headers=DEFAULT_HEADERS,
+                url, timeout=timeout,
                 ssl=False, allow_redirects=True,
             ) as resp:
                 if resp.status == 200:
@@ -418,7 +418,7 @@ class ImageScraper:
                 if resp.status in (405, 403):
                     async with session.get(
                         url, timeout=timeout,
-                        headers={**DEFAULT_HEADERS, "Range": "bytes=0-0"},
+                        headers={"Range": "bytes=0-0"},
                         ssl=False, allow_redirects=True,
                     ) as resp2:
                         ct = resp2.headers.get("content-type", "").lower()
@@ -457,7 +457,8 @@ class ImageScraper:
     def _can_fetch(self, url: str) -> bool:
         if not self.config.respect_robots or self._robots_parser is None:
             return True
-        return self._robots_parser.can_fetch("*", url)
+        ua = DEFAULT_HEADERS.get("User-Agent", "*")
+        return self._robots_parser.can_fetch(ua, url)
 
     def _extract_image_urls(self, soup: BeautifulSoup, page_url: str) -> list[dict]:
         """Extract image URLs. Returns list of {url, is_thumbnail, fullres_url}."""
@@ -599,7 +600,7 @@ class ImageScraper:
         try:
             timeout = aiohttp.ClientTimeout(total=self.config.request_timeout)
             async with session.get(
-                url, timeout=timeout, headers=DEFAULT_HEADERS, ssl=False,
+                url, timeout=timeout, ssl=False,
                 allow_redirects=True,
             ) as resp:
                 result["status"] = resp.status
@@ -626,7 +627,7 @@ class ImageScraper:
         try:
             timeout = aiohttp.ClientTimeout(total=8)
             async with session.head(
-                url, timeout=timeout, headers=DEFAULT_HEADERS, ssl=False
+                url, timeout=timeout, ssl=False
             ) as resp:
                 if resp.status == 200:
                     size = int(resp.headers.get("content-length", 0))
@@ -634,7 +635,7 @@ class ImageScraper:
                     return size, ct
                 async with session.get(
                     url, timeout=timeout,
-                    headers={**DEFAULT_HEADERS, "Range": "bytes=0-0"},
+                    headers={"Range": "bytes=0-0"},
                     ssl=False,
                 ) as resp2:
                     size = 0
@@ -834,7 +835,9 @@ class ImageScraper:
         await self._emit_progress()
 
         connector = aiohttp.TCPConnector(limit=self.config.max_concurrent)
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(
+            connector=connector, headers=DEFAULT_HEADERS
+        ) as session:
             await self._check_robots(session)
 
             start_url = self._normalize_url(self.config.start_url)
@@ -919,7 +922,7 @@ class ImageScraper:
                 try:
                     timeout = aiohttp.ClientTimeout(total=20)
                     async with session.get(
-                        img.url, timeout=timeout, headers=DEFAULT_HEADERS, ssl=False,
+                        img.url, timeout=timeout, ssl=False,
                     ) as resp:
                         if resp.status != 200:
                             continue

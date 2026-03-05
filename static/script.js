@@ -7,6 +7,7 @@ let followLinks = true;
 let exhaustAll = false;
 let detectFullres = false;
 let sameDomainOnly = true;
+let respectRobots = true;
 let selectedImages = new Set();
 let allSelectMode = false;
 let allImageDetails = [];
@@ -107,6 +108,11 @@ function toggleOption(which) {
         document.getElementById('domainToggle').classList.toggle('on', sameDomainOnly);
         if (!sameDomainOnly) showWarn('⚠ Cross-domain scraping may discover a very large number of links.', 5000);
         else hideWarn();
+    } else if (which === 'robots') {
+        respectRobots = !respectRobots;
+        document.getElementById('robotsToggle').classList.toggle('on', respectRobots);
+        if (!respectRobots) showWarn('⚠ Ignoring robots.txt — some sites may block or rate-limit you.', 5000);
+        else hideWarn();
     }
 }
 
@@ -167,6 +173,7 @@ async function startScrape() {
             url, max_depth: maxDepth, max_pages: maxPages,
             follow_links: followLinks, exhaust_all: exhaustAll,
             detect_fullres: detectFullres, same_domain_only: sameDomainOnly,
+            respect_robots: respectRobots,
         })
     });
     const data = await res.json();
