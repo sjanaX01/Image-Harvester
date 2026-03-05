@@ -90,7 +90,7 @@ async function startScrape() {
     setStats(0, 0, 0, 0);
     document.getElementById('currentUrl').textContent = '—';
     document.getElementById('downloadBtn').disabled = true;
-    document.getElementById('downloadSelBtn').disabled = true;
+    closeDlMenu();
     document.getElementById('graphEmpty').style.display = 'flex';
     updateSelBar();
     resetGraphState();
@@ -159,54 +159,82 @@ async function cancelScrape() {
     document.getElementById('cancelBtn').disabled = true;
 }
 
-function downloadZip() {
+// ── DOWNLOAD DROPDOWN ──
+let dlMenuOpen = false;
+
+function toggleDlMenu() {
+    const dd = document.getElementById('dlDropdown');
+    dlMenuOpen = !dlMenuOpen;
+    dd.classList.toggle('open', dlMenuOpen);
+    if (dlMenuOpen) updateDlCounts();
+}
+
+function closeDlMenu() {
+    dlMenuOpen = false;
+    const dd = document.getElementById('dlDropdown');
+    if (dd) dd.classList.remove('open');
+}
+
+function updateDlCounts() {
+    const thumbs = allImageDetails.filter(i => i.is_thumbnail);
+    const full = allImageDetails.filter(i => !i.is_thumbnail);
+    document.getElementById('dlCountAll').textContent = allImageDetails.length + ' images';
+    document.getElementById('dlCountThumb').textContent = thumbs.length + ' images';
+    document.getElementById('dlCountFull').textContent = full.length + ' images';
+    const selOpt = document.getElementById('dlOptSelected');
+    if (selectedImages.size > 0) {
+        selOpt.style.display = 'flex';
+        document.getElementById('dlCountSel').textContent = selectedImages.size + ' images';
+    } else {
+        selOpt.style.display = 'none';
+    }
+}
+
+async function downloadCategory(cat) {
     if (!jobId) return;
+    closeDlMenu();
+
+    let urls = [];
+    if (cat === 'all') {
+        urls = allImageDetails.map(i => i.url);
+    } else if (cat === 'thumbnails') {
+        urls = allImageDetails.filter(i => i.is_thumbnail).map(i => i.url);
+    } else if (cat === 'fullres') {
+        urls = allImageDetails.filter(i => !i.is_thumbnail).map(i => i.url);
+    } else if (cat === 'selected') {
+        urls = Array.from(selectedImages);
+    }
+
+    if (urls.length === 0) return;
+
     document.getElementById('zipOverlay').classList.add('open');
-    document.getElementById('zipDetail').textContent = 'Preparing…';
-    document.getElementById('zipBar').style.width = '0%';
-    // Start polling zip progress
-    const zpTimer = setInterval(async () => {
-        try {
-            const res = await fetch(`/status/${jobId}`);
-            const data = await res.json();
-            if (data.zip_progress) {
-                showZipProgress(data.zip_progress);
-                if (data.zip_progress.status === 'done') {
-                    clearInterval(zpTimer);
-                    document.getElementById('zipOverlay').classList.remove('open');
-                }
-            }
-        } catch (e) { }
-    }, 500);
-    window.location.href = `/download/${jobId}`;
-    // Fallback close
-    setTimeout(() => {
-        clearInterval(zpTimer);
-        document.getElementById('zipOverlay').classList.remove('open');
-    }, 30000);
+    document.getElementById('zipDetail').textContent = `Packaging ${urls.length} images…`;
+    document.getElementById('zipBar').style.width = '10%';
+
+    try {
+        const res = await fetch(`/download-selected/${jobId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urls })
+        });
+        document.getElementById('zipBar').style.width = '80%';
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `images_${cat}.zip`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        document.getElementById('zipBar').style.width = '100%';
+    } catch (e) {
+        document.getElementById('zipDetail').textContent = 'Download failed.';
+    }
+    setTimeout(() => { document.getElementById('zipOverlay').classList.remove('open'); }, 600);
 }
 
-async function downloadSelected() {
-    if (!jobId || selectedImages.size === 0) return;
-    document.getElementById('zipOverlay').classList.add('open');
-    document.getElementById('zipDetail').textContent = `Packaging ${selectedImages.size} images…`;
-    document.getElementById('zipBar').style.width = '50%';
-
-    const res = await fetch(`/download-selected/${jobId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls: Array.from(selectedImages) })
-    });
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'selected_images.zip';
-    a.click();
-    URL.revokeObjectURL(a.href);
-
-    document.getElementById('zipBar').style.width = '100%';
-    setTimeout(() => { document.getElementById('zipOverlay').classList.remove('open'); }, 500);
-}
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+    if (dlMenuOpen && !e.target.closest('#dlDropWrap')) closeDlMenu();
+});
 
 function showZipProgress(zp) {
     if (zp.total > 0) {
@@ -363,7 +391,6 @@ function toggleSection(key) {
 function updateSelBar() {
     const bar = document.getElementById('selBar');
     const cnt = document.getElementById('selCount');
-    const dlBtn = document.getElementById('downloadSelBtn');
     const n = selectedImages.size;
     if (n > 0) {
         bar.classList.add('vis');
@@ -371,7 +398,6 @@ function updateSelBar() {
     } else {
         bar.classList.remove('vis');
     }
-    if (dlBtn) dlBtn.disabled = n === 0;
 }
 
 function createImageCard(img, showSource) {

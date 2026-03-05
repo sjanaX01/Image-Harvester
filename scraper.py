@@ -6,7 +6,7 @@ import re
 import zipfile
 from dataclasses import dataclass, field
 from typing import Callable, Optional
-from urllib.parse import urljoin, urlparse, unquote
+from urllib.parse import urljoin, urlparse, urlunparse, unquote, parse_qs, urlencode
 from urllib.robotparser import RobotFileParser
 
 import aiohttp
@@ -175,6 +175,22 @@ class ImageScraper:
         path_lower = unquote(parsed.path).lower()
         return any(path_lower.endswith(ext) for ext in IMAGE_EXTENSIONS)
 
+    def _is_likely_image_url(self, url: str) -> bool:
+        """Like _is_image_url but also matches dynamic image endpoints
+        (URLs with image-related query params but no file extension)."""
+        if self._is_image_url(url):
+            return True
+        parsed = urlparse(url)
+        q_lower = parsed.query.lower()
+        path_lower = parsed.path.lower()
+        # Dynamic endpoints that serve images
+        image_hints = ("image", "img", "photo", "pic", "thumb", "media", "file")
+        if any(h in path_lower for h in image_hints):
+            return True
+        if any(h in q_lower for h in image_hints):
+            return True
+        return False
+
     def _matches_format_filter(self, url: str) -> bool:
         parsed = urlparse(url)
         path_lower = unquote(parsed.path).lower()
@@ -185,6 +201,169 @@ class ImageScraper:
         if not any(path_lower.endswith(ext) for ext in IMAGE_EXTENSIONS):
             return True
         return False
+
+    # ── Full-Resolution Detection Engine ─────────────────────────────────
+
+    # Query params commonly used to request thumbnails.
+    # If ANY of these are present, the URL is likely a thumbnail.
+    THUMBNAIL_PARAMS = {
+        "thumb", "thumbnail", "tn",
+        "resize", "crop", "fit", "cover",
+        "format", "auto",
+    }
+    # Params whose small numeric value indicates a thumbnail.
+    SIZE_PARAMS = {
+        "w", "h", "width", "height", "size", "sz",
+        "maxwidth", "maxheight", "max_width", "max_height",
+        "tw", "th",  # thumb width/height
+    }
+    # Params that request reduced quality.
+    QUALITY_PARAMS = {"quality", "q", "ql"}
+
+    def _generate_fullres_candidates(self, url: str) -> list[str]:
+        """Generate candidate full-resolution URLs from a thumbnail URL.
+        Returns a list of candidate URLs sorted by likelihood (best first)."""
+        candidates = []
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        path = parsed.path
+
+        # ── Strategy 1: Strip thumbnail query parameters ──────────────
+        keys_lower = {k.lower(): k for k in params}
+        thumb_keys_found = []
+
+        for k, orig_k in keys_lower.items():
+            if k in self.THUMBNAIL_PARAMS:
+                thumb_keys_found.append(orig_k)
+            elif k in self.SIZE_PARAMS:
+                vals = params[orig_k]
+                try:
+                    if vals and int(vals[0]) < 1200:
+                        thumb_keys_found.append(orig_k)
+                except (ValueError, IndexError):
+                    pass
+            elif k in self.QUALITY_PARAMS:
+                vals = params[orig_k]
+                try:
+                    if vals and int(vals[0]) < 90:
+                        thumb_keys_found.append(orig_k)
+                except (ValueError, IndexError):
+                    pass
+
+        if thumb_keys_found:
+            # Candidate A: strip ALL thumbnail params
+            clean_params = {k: v for k, v in params.items() if k not in thumb_keys_found}
+            new_query = urlencode(clean_params, doseq=True)
+            c = urlunparse(parsed._replace(query=new_query))
+            if c != url:
+                candidates.append(c)
+
+            # Candidate B: only strip size params, keep the rest
+            size_keys = [k for k in thumb_keys_found if keys_lower.get(k, "").lower() in self.SIZE_PARAMS]
+            if size_keys and size_keys != thumb_keys_found:
+                partial_params = {k: v for k, v in params.items() if k not in size_keys}
+                new_query = urlencode(partial_params, doseq=True)
+                c2 = urlunparse(parsed._replace(query=new_query))
+                if c2 != url and c2 not in candidates:
+                    candidates.append(c2)
+
+        # ── Strategy 2: Path pattern rewriting ────────────────────────
+        path_lower = path.lower()
+
+        # /thumb/ → /full/ or /original/ or /large/
+        thumb_dirs = ["/thumb/", "/thumbs/", "/thumbnails/", "/thumbnail/",
+                      "/small/", "/sm/", "/mini/", "/preview/", "/cache/"]
+        full_dirs = ["/full/", "/original/", "/originals/", "/large/", "/lg/", "/hires/"]
+
+        for td in thumb_dirs:
+            if td in path_lower:
+                idx = path_lower.index(td)
+                prefix = path[:idx]
+                suffix = path[idx + len(td):]
+                for fd in full_dirs:
+                    c = urlunparse(parsed._replace(path=prefix + fd + suffix))
+                    if c != url and c not in candidates:
+                        candidates.append(c)
+                # Also try just removing the thumb directory level
+                c_plain = urlunparse(parsed._replace(path=prefix + "/" + suffix))
+                if c_plain != url and c_plain not in candidates:
+                    candidates.append(c_plain)
+                break
+
+        # _thumb.ext → .ext, _small.ext → .ext, _sm.ext → .ext
+        suffix_patterns = [
+            (r'_thumb(\.[a-zA-Z]{3,4})$', r'\1'),
+            (r'_small(\.[a-zA-Z]{3,4})$', r'\1'),
+            (r'_sm(\.[a-zA-Z]{3,4})$', r'\1'),
+            (r'_tn(\.[a-zA-Z]{3,4})$', r'\1'),
+            (r'_preview(\.[a-zA-Z]{3,4})$', r'\1'),
+            (r'_thumb(\.[a-zA-Z]{3,4})$', r'_full\1'),
+            (r'_small(\.[a-zA-Z]{3,4})$', r'_large\1'),
+            (r'-thumb(\.[a-zA-Z]{3,4})$', r'\1'),
+            (r'-small(\.[a-zA-Z]{3,4})$', r'\1'),
+            (r'\.thumb(\.[a-zA-Z]{3,4})$', r'\1'),
+        ]
+        for pattern, repl in suffix_patterns:
+            new_path = re.sub(pattern, repl, path, flags=re.IGNORECASE)
+            if new_path != path:
+                c = urlunparse(parsed._replace(path=new_path))
+                if c != url and c not in candidates:
+                    candidates.append(c)
+
+        # WordPress: -NNNxNNN.ext → .ext
+        wp_match = re.sub(r'-\d{2,4}x\d{2,4}(\.[a-zA-Z]{3,4})$', r'\1', path)
+        if wp_match != path:
+            c = urlunparse(parsed._replace(path=wp_match))
+            if c != url and c not in candidates:
+                candidates.append(c)
+
+        # Cloudinary: /c_thumb,w_200,h_200/ → remove transform segment
+        cloud_match = re.sub(
+            r'/[a-z]_[a-z0-9_,]+(?:/[a-z]_[a-z0-9_,]+)*/',
+            '/', path, count=1, flags=re.IGNORECASE
+        )
+        if cloud_match != path:
+            c = urlunparse(parsed._replace(path=cloud_match))
+            if c != url and c not in candidates:
+                candidates.append(c)
+
+        return candidates
+
+    async def _probe_url(self, session: aiohttp.ClientSession, url: str) -> bool:
+        """Check if a URL returns a valid image (HTTP 200 with image content-type)."""
+        try:
+            timeout = aiohttp.ClientTimeout(total=6)
+            async with session.head(
+                url, timeout=timeout, headers=DEFAULT_HEADERS,
+                ssl=False, allow_redirects=True,
+            ) as resp:
+                if resp.status == 200:
+                    ct = resp.headers.get("content-type", "").lower()
+                    return "image" in ct
+                # Some servers don't support HEAD; try a range GET
+                if resp.status in (405, 403):
+                    async with session.get(
+                        url, timeout=timeout,
+                        headers={**DEFAULT_HEADERS, "Range": "bytes=0-0"},
+                        ssl=False, allow_redirects=True,
+                    ) as resp2:
+                        ct = resp2.headers.get("content-type", "").lower()
+                        return resp2.status in (200, 206) and "image" in ct
+        except Exception:
+            pass
+        return False
+
+    async def _resolve_fullres(self, session: aiohttp.ClientSession, url: str) -> str | None:
+        """Try to find a full-resolution version of the image at `url`.
+        Returns the full-res URL if found, else None."""
+        candidates = self._generate_fullres_candidates(url)
+        for candidate in candidates:
+            if await self._probe_url(session, candidate):
+                self._log(f"  ⬆ Full-res found: {candidate}")
+                return candidate
+        return None
+
+    # ── End Full-Resolution Detection ─────────────────────────────────
 
     async def _check_robots(self, session: aiohttp.ClientSession):
         if not self.config.respect_robots:
@@ -235,22 +414,58 @@ class ImageScraper:
             is_thumb = bool(fullres)
             add_img(img_url, is_thumb=is_thumb, fullres=fullres)
 
-            # If detect_fullres and there's a full-res, add it too
+            # If detect_fullres and there's a known full-res, add it directly too
             if fullres and self.config.detect_fullres:
                 add_img(fullres, is_thumb=False, fullres="")
 
-            # srcset
+            # srcset — pick the largest descriptor as potential full-res
             srcset = img.get("srcset")
             if srcset:
+                srcset_entries = []
                 for entry in srcset.split(","):
                     parts = entry.strip().split()
                     if parts:
-                        add_img(urljoin(page_url, parts[0]))
+                        entry_url = urljoin(page_url, parts[0])
+                        descriptor = parts[1] if len(parts) > 1 else "0w"
+                        srcset_entries.append((entry_url, descriptor))
+
+                if self.config.detect_fullres and srcset_entries:
+                    # Pick the largest srcset entry as the full-res
+                    def _desc_value(desc):
+                        try:
+                            return int(desc.replace("w", "").replace("x", ""))
+                        except ValueError:
+                            return 0
+                    srcset_entries.sort(key=lambda x: _desc_value(x[1]), reverse=True)
+                    best = srcset_entries[0][0]
+                    if best != img_url:
+                        add_img(best, is_thumb=False, fullres="")
+                else:
+                    for entry_url, _ in srcset_entries:
+                        add_img(entry_url)
 
             # data-src (lazy loading)
             data_src = img.get("data-src")
             if data_src:
                 add_img(urljoin(page_url, data_src))
+
+            # data-full, data-original, data-zoom-image (common full-res attributes)
+            for attr in ("data-full", "data-original", "data-zoom-image",
+                         "data-large", "data-hires", "data-full-src"):
+                val = img.get(attr)
+                if val:
+                    full_url = urljoin(page_url, val)
+                    if full_url != img_url:
+                        if self.config.detect_fullres:
+                            add_img(full_url, is_thumb=False, fullres="")
+                            # Mark the original as thumbnail if we found a better one
+                            for r in results:
+                                if r["url"] == self._normalize_url(img_url):
+                                    r["is_thumbnail"] = True
+                                    r["fullres_url"] = full_url
+                                    break
+                        else:
+                            add_img(full_url)
 
         # <picture><source srcset="...">
         for source in soup.find_all("source"):
@@ -391,36 +606,51 @@ class ImageScraper:
             if not self._matches_format_filter(img_url):
                 continue
 
+            is_thumb = img_data["is_thumbnail"]
+            fullres_url = img_data.get("fullres_url", "")
+
+            # ── Smart Full-Res Resolution ──
+            # When detect_fullres is ON and this image hasn't already been
+            # identified as a full-res image, try to find its full-res version.
+            if self.config.detect_fullres and not fullres_url and not is_thumb:
+                resolved = await self._resolve_fullres(session, img_url)
+                if resolved and resolved != img_url and resolved not in self.image_urls:
+                    # Mark this image as a thumbnail, add the resolved full-res
+                    is_thumb = True
+                    fullres_url = resolved
+
+                    # Add the full-res image directly
+                    self.image_urls.add(resolved)
+                    fr_filename = os.path.basename(urlparse(resolved).path) or "image"
+                    fr_size, fr_ct = 0, ""
+                    info = await self._get_image_info(session, resolved)
+                    if info:
+                        fr_size, fr_ct = info
+                    self.images.append(ScrapedImage(
+                        url=resolved, source_page=url,
+                        file_size=fr_size, content_type=fr_ct,
+                        filename=fr_filename,
+                        is_thumbnail=False, fullres_url="",
+                    ))
+
+            # Get file size if filter requires it
+            file_size, content_type = 0, ""
             if self.config.min_file_size > 0:
                 info = await self._get_image_info(session, img_url)
                 if info:
-                    size, ct = info
-                    if size > 0 and size < self.config.min_file_size:
+                    file_size, content_type = info
+                    if file_size > 0 and file_size < self.config.min_file_size:
                         continue
-                    self.image_urls.add(img_url)
-                    filename = os.path.basename(urlparse(img_url).path) or "image"
-                    self.images.append(ScrapedImage(
-                        url=img_url, source_page=url, file_size=size,
-                        content_type=ct, filename=filename,
-                        is_thumbnail=img_data["is_thumbnail"],
-                        fullres_url=img_data.get("fullres_url", ""),
-                    ))
-                else:
-                    self.image_urls.add(img_url)
-                    filename = os.path.basename(urlparse(img_url).path) or "image"
-                    self.images.append(ScrapedImage(
-                        url=img_url, source_page=url, filename=filename,
-                        is_thumbnail=img_data["is_thumbnail"],
-                        fullres_url=img_data.get("fullres_url", ""),
-                    ))
-            else:
-                self.image_urls.add(img_url)
-                filename = os.path.basename(urlparse(img_url).path) or "image"
-                self.images.append(ScrapedImage(
-                    url=img_url, source_page=url, filename=filename,
-                    is_thumbnail=img_data["is_thumbnail"],
-                    fullres_url=img_data.get("fullres_url", ""),
-                ))
+
+            self.image_urls.add(img_url)
+            filename = os.path.basename(urlparse(img_url).path) or "image"
+            self.images.append(ScrapedImage(
+                url=img_url, source_page=url,
+                file_size=file_size, content_type=content_type,
+                filename=filename,
+                is_thumbnail=is_thumb,
+                fullres_url=fullres_url,
+            ))
 
         images_found = len(self.images) - images_before
         self.progress.image_count = len(self.images)

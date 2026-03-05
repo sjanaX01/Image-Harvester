@@ -143,16 +143,46 @@
             <div class="divider"></div>
 
             <div style="display:flex; flex-direction:column; gap:7px;">
-                <button class="btn btn-outline" id="downloadBtn" onclick="downloadZip()" disabled>
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                        <path d="M6 1v7M3 6l3 3 3-3M2 11h8" stroke="currentColor" stroke-width="1.5"
-                            stroke-linecap="round" />
-                    </svg>
-                    Download All ZIP
-                </button>
-                <button class="btn btn-outline" id="downloadSelBtn" onclick="downloadSelected()" disabled>
-                    ↓ Download Selected
-                </button>
+                <div class="dl-dropdown-wrap" id="dlDropWrap">
+                    <button class="btn btn-outline" id="downloadBtn" onclick="toggleDlMenu()" disabled>
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                            <path d="M6 1v7M3 6l3 3 3-3M2 11h8" stroke="currentColor" stroke-width="1.5"
+                                stroke-linecap="round" />
+                        </svg>
+                        Download ZIP
+                    </button>
+                    <div class="dl-dropdown" id="dlDropdown">
+                        <button class="dl-opt" onclick="downloadCategory('all')">
+                            <span class="dl-opt-icon">⬡</span>
+                            <span class="dl-opt-info">
+                                <span class="dl-opt-title">All Images</span>
+                                <span class="dl-opt-desc" id="dlCountAll">0 images</span>
+                            </span>
+                        </button>
+                        <button class="dl-opt" onclick="downloadCategory('thumbnails')">
+                            <span class="dl-opt-icon">◫</span>
+                            <span class="dl-opt-info">
+                                <span class="dl-opt-title">Thumbnails Only</span>
+                                <span class="dl-opt-desc" id="dlCountThumb">0 images</span>
+                            </span>
+                        </button>
+                        <button class="dl-opt" onclick="downloadCategory('fullres')">
+                            <span class="dl-opt-icon">◈</span>
+                            <span class="dl-opt-info">
+                                <span class="dl-opt-title">High-Res Only</span>
+                                <span class="dl-opt-desc" id="dlCountFull">0 images</span>
+                            </span>
+                        </button>
+                        <button class="dl-opt" id="dlOptSelected" onclick="downloadCategory('selected')"
+                            style="display:none;">
+                            <span class="dl-opt-icon">✓</span>
+                            <span class="dl-opt-info">
+                                <span class="dl-opt-title">Selected Only</span>
+                                <span class="dl-opt-desc" id="dlCountSel">0 images</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </aside>
 
@@ -165,7 +195,8 @@
                     <span class="sel-count" id="selCount">0 selected</span>
                     <button class="sel-btn" id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
                     <button class="sel-btn" onclick="clearSelection()">Clear</button>
-                    <button class="sel-btn sel-btn-dl" onclick="downloadSelected()">↓ Download Selected</button>
+                    <button class="sel-btn sel-btn-dl" onclick="downloadCategory('selected')">↓ Download
+                        Selected</button>
                 </div>
                 <div class="gallery-wrap" id="galleryWrap">
                     <div class="gallery-header">
