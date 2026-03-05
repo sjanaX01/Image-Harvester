@@ -1011,6 +1011,73 @@ function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// ── EXPORT ──
+function triggerDownload(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 100);
+}
+
+function csvEsc(v) {
+    return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+}
+
+function exportImages(format) {
+    if (!allImageDetails.length) { showWarn('⚠ No image data to export yet.', 3000); return; }
+    const base = jobId || 'images';
+    if (format === 'json') {
+        triggerDownload(
+            new Blob([JSON.stringify(allImageDetails, null, 2)], { type: 'application/json' }),
+            `${base}_images.json`
+        );
+    } else {
+        const cols = ['url', 'filename', 'source_page', 'file_size', 'is_thumbnail', 'fullres_url'];
+        const rows = allImageDetails.map(img =>
+            [img.url, img.filename, img.source_page, img.file_size ?? '', img.is_thumbnail, img.fullres_url ?? '']
+            .map(csvEsc).join(',')
+        );
+        triggerDownload(
+            new Blob([[cols.join(','), ...rows].join('\r\n')], { type: 'text/csv' }),
+            `${base}_images.csv`
+        );
+    }
+}
+
+function exportRawData(format) {
+    const pages = Object.values(lastRawPages);
+    if (!pages.length) { showWarn('⚠ No raw data to export yet.', 3000); return; }
+    const base = jobId || 'rawdata';
+    if (format === 'json') {
+        triggerDownload(
+            new Blob([JSON.stringify(lastRawPages, null, 2)], { type: 'application/json' }),
+            `${base}_rawdata.json`
+        );
+    } else {
+        const cols = ['url', 'title', 'status_code', 'html_length', 'img_tag_count',
+                      'internal_links', 'external_links', 'meta_count', 'scripts', 'stylesheets'];
+        const rows = pages.map(p => {
+            const links = p.links || [];
+            return [
+                p.url, p.title ?? '', p.status_code ?? '', p.html_length ?? '',
+                p.img_tag_count ?? '',
+                links.filter(l => l.internal).length,
+                links.filter(l => !l.internal).length,
+                (p.meta_tags || []).length,
+                (p.scripts || []).length,
+                (p.stylesheets || []).length,
+            ].map(csvEsc).join(',');
+        });
+        triggerDownload(
+            new Blob([[cols.join(','), ...rows].join('\r\n')], { type: 'text/csv' }),
+            `${base}_rawdata.csv`
+        );
+    }
+}
+
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
     initLogResize('logResize1', 'logPanel1');

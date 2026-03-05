@@ -1335,6 +1335,29 @@ input:focus {
     overflow: hidden;
 }
 
+/* EXPORT BUTTONS */
+.export-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.export-label {
+    font-size: 9px;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-right: 2px;
+}
+
+.export-sep {
+    width: 1px;
+    height: 14px;
+    background: var(--border);
+    margin: 0 2px;
+}
+
 .rawdata-toolbar {
     display: flex;
     align-items: center;

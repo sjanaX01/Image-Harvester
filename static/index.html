@@ -225,8 +225,15 @@
                 <div class="gallery-wrap" id="galleryWrap">
                     <div class="gallery-header">
                         <div class="gallery-title">Scraped Images</div>
-                        <span style="font-size:11px; color:var(--ink-muted); font-family:'IBM Plex Mono',monospace;"
-                            id="galleryCount">—</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:11px; color:var(--ink-muted); font-family:'IBM Plex Mono',monospace;"
+                                id="galleryCount">—</span>
+                            <div class="export-btns">
+                                <span class="export-label">Export</span>
+                                <button class="sel-btn" onclick="exportImages('json')">↓ JSON</button>
+                                <button class="sel-btn" onclick="exportImages('csv')">↓ CSV</button>
+                            </div>
+                        </div>
                     </div>
                     <div id="galleryContent">
                         <div class="empty-state" id="galleryEmpty">
@@ -318,6 +325,12 @@
                     <div class="rawdata-toolbar">
                         <div class="gallery-title">Raw Data</div>
                         <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="export-btns">
+                                <span class="export-label">Export</span>
+                                <button class="sel-btn" onclick="exportRawData('json')">↓ JSON</button>
+                                <button class="sel-btn" onclick="exportRawData('csv')">↓ CSV</button>
+                            </div>
+                            <div class="export-sep"></div>
                             <button class="sel-btn" id="rawLiveToggle" onclick="toggleRawLive()">● Live Feed</button>
                             <select class="raw-page-select" id="rawPageSelect" onchange="renderRawPage(this.value)">
                                 <option value="">Select a page…</option>
