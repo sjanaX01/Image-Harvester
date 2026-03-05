@@ -76,6 +76,7 @@ async function startScrape() {
     shownImages = new Set();
     selectedImages = new Set();
     allSelectMode = false;
+    sectionCollapsed = { thumbs: false, fullres: false };
     allImageDetails = [];
     document.getElementById('galleryContent').innerHTML = '';
     document.getElementById('galleryEmpty') || null; // recreated below
@@ -90,8 +91,8 @@ async function startScrape() {
     document.getElementById('currentUrl').textContent = '—';
     document.getElementById('downloadBtn').disabled = true;
     document.getElementById('downloadSelBtn').disabled = true;
-    document.getElementById('selectAllBtn').classList.remove('active');
     document.getElementById('graphEmpty').style.display = 'flex';
+    updateSelBar();
     resetGraphState();
 
     setStatus('starting');
@@ -281,6 +282,8 @@ function renderNewImages(imageDetails) {
     rebuildGallery();
 }
 
+let sectionCollapsed = { thumbs: false, fullres: false };
+
 function rebuildGallery() {
     const content = document.getElementById('galleryContent');
     content.innerHTML = '';
@@ -289,23 +292,21 @@ function rebuildGallery() {
     const fullres = allImageDetails.filter(img => !img.is_thumbnail);
 
     if (thumbnails.length > 0) {
-        const sec = document.createElement('div');
-        sec.innerHTML = `<div class="section-divider">Thumbnails <span class="count">${thumbnails.length}</span></div>`;
-        content.appendChild(sec);
-
+        content.appendChild(makeSectionHeader('thumbs', 'Thumbnails', thumbnails.length));
         const grid = document.createElement('div');
-        grid.className = 'gallery';
+        grid.className = 'gallery' + (sectionCollapsed.thumbs ? ' sec-collapsed' : '');
+        grid.id = 'thumbGrid';
         thumbnails.forEach(img => grid.appendChild(createImageCard(img)));
         content.appendChild(grid);
     }
 
     if (fullres.length > 0) {
-        const sec = document.createElement('div');
-        sec.innerHTML = `<div class="section-divider" style="margin-top:16px;">Full-Resolution Images <span class="count">${fullres.length}</span></div>`;
-        content.appendChild(sec);
-
+        const hdr = makeSectionHeader('fullres', 'Full-Resolution Images', fullres.length);
+        if (thumbnails.length > 0) hdr.style.marginTop = '20px';
+        content.appendChild(hdr);
         const grid = document.createElement('div');
-        grid.className = 'gallery';
+        grid.className = 'gallery' + (sectionCollapsed.fullres ? ' sec-collapsed' : '');
+        grid.id = 'fullresGrid';
         fullres.forEach(img => grid.appendChild(createImageCard(img, true)));
         content.appendChild(grid);
     }
@@ -316,6 +317,61 @@ function rebuildGallery() {
         emptyDiv.innerHTML = '<div class="big-icon">⬡</div><p>No images found yet</p>';
         content.appendChild(emptyDiv);
     }
+}
+
+function makeSectionHeader(key, title, count) {
+    const div = document.createElement('div');
+    div.className = 'section-divider';
+    div.id = 'sec-hdr-' + key;
+
+    const left = document.createElement('div');
+    left.className = 'sec-left';
+
+    const btn = document.createElement('button');
+    btn.className = 'sec-toggle';
+    btn.textContent = sectionCollapsed[key] ? '▶' : '▼';
+    btn.title = sectionCollapsed[key] ? 'Expand section' : 'Minimize section';
+    btn.onclick = () => toggleSection(key);
+
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = title;
+
+    left.appendChild(btn);
+    left.appendChild(titleSpan);
+
+    const countSpan = document.createElement('span');
+    countSpan.className = 'count';
+    countSpan.textContent = count + ' images';
+
+    div.appendChild(left);
+    div.appendChild(countSpan);
+    return div;
+}
+
+function toggleSection(key) {
+    sectionCollapsed[key] = !sectionCollapsed[key];
+    const gridId = key === 'thumbs' ? 'thumbGrid' : 'fullresGrid';
+    const grid = document.getElementById(gridId);
+    const btn = document.querySelector('#sec-hdr-' + key + ' .sec-toggle');
+    if (grid) grid.classList.toggle('sec-collapsed', sectionCollapsed[key]);
+    if (btn) {
+        btn.textContent = sectionCollapsed[key] ? '▶' : '▼';
+        btn.title = sectionCollapsed[key] ? 'Expand section' : 'Minimize section';
+    }
+}
+
+function updateSelBar() {
+    const bar = document.getElementById('selBar');
+    const cnt = document.getElementById('selCount');
+    const dlBtn = document.getElementById('downloadSelBtn');
+    const n = selectedImages.size;
+    if (n > 0) {
+        bar.classList.add('vis');
+        cnt.textContent = n + ' selected';
+    } else {
+        bar.classList.remove('vis');
+    }
+    if (dlBtn) dlBtn.disabled = n === 0;
 }
 
 function createImageCard(img, showSource) {
@@ -366,7 +422,7 @@ function toggleSelect(url, card) {
         selectedImages.add(url);
         if (card) card.classList.add('selected');
     }
-    document.getElementById('downloadSelBtn').disabled = selectedImages.size === 0;
+    updateSelBar();
 }
 
 function toggleSelectAll() {
@@ -382,15 +438,16 @@ function toggleSelectAll() {
     document.querySelectorAll('.img-card').forEach(c => {
         c.classList.toggle('selected', selectedImages.has(c.dataset.url));
     });
-    document.getElementById('downloadSelBtn').disabled = selectedImages.size === 0;
+    updateSelBar();
 }
 
 function clearSelection() {
     selectedImages.clear();
     allSelectMode = false;
-    document.getElementById('selectAllBtn').classList.remove('active');
+    const btn = document.getElementById('selectAllBtn');
+    if (btn) btn.classList.remove('active');
     document.querySelectorAll('.img-card').forEach(c => c.classList.remove('selected'));
-    document.getElementById('downloadSelBtn').disabled = true;
+    updateSelBar();
 }
 
 // ── IMAGE DETAIL DASHBOARD ──
@@ -449,7 +506,7 @@ function detailToggleSelect() {
             c.classList.toggle('selected', selectedImages.has(detailImgData.url));
         }
     });
-    document.getElementById('downloadSelBtn').disabled = selectedImages.size === 0;
+    updateSelBar();
     updateDetailSelectBtn();
 }
 

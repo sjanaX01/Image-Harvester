@@ -161,15 +161,17 @@
 
             <!-- GALLERY PANEL -->
             <div class="panel" id="panelGallery">
+                <div class="sel-bar" id="selBar">
+                    <span class="sel-count" id="selCount">0 selected</span>
+                    <button class="sel-btn" id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
+                    <button class="sel-btn" onclick="clearSelection()">Clear</button>
+                    <button class="sel-btn sel-btn-dl" onclick="downloadSelected()">↓ Download Selected</button>
+                </div>
                 <div class="gallery-wrap" id="galleryWrap">
                     <div class="gallery-header">
                         <div class="gallery-title">Scraped Images</div>
-                        <div class="gallery-actions">
-                            <span style="font-size:11px; color:var(--ink-muted); font-family:'IBM Plex Mono',monospace;"
-                                id="galleryCount">—</span>
-                            <button id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
-                            <button id="clearSelBtn" onclick="clearSelection()">Clear</button>
-                        </div>
+                        <span style="font-size:11px; color:var(--ink-muted); font-family:'IBM Plex Mono',monospace;"
+                            id="galleryCount">—</span>
                     </div>
                     <div id="galleryContent">
                         <div class="empty-state" id="galleryEmpty">

@@ -481,6 +481,65 @@ input:focus {
     border-color: var(--ink);
 }
 
+/* SELECTION BAR */
+.sel-bar {
+    display: none;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 20px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.sel-bar.vis {
+    display: flex;
+}
+
+.sel-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    flex: 1;
+}
+
+.sel-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--ink-soft);
+    transition: all 0.12s;
+}
+
+.sel-btn:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+}
+
+.sel-btn.active {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+}
+
+.sel-btn-dl {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+}
+
+.sel-btn-dl:hover {
+    background: #2d2d2d;
+    color: var(--bg);
+}
+
+/* SECTION DIVIDER */
 .section-divider {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 10px;
@@ -492,12 +551,47 @@ input:focus {
     margin-bottom: 8px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
+}
+
+.sec-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sec-toggle {
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-muted);
+    font-size: 9px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    transition: color 0.12s, background 0.12s;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.sec-toggle:hover {
+    color: var(--ink);
+    background: var(--accent-glow);
 }
 
 .section-divider .count {
     font-weight: 600;
     color: var(--ink-soft);
+    flex-shrink: 0;
+}
+
+.gallery.sec-collapsed {
+    display: none;
 }
 
 .gallery {
