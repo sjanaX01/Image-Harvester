@@ -24,8 +24,16 @@ DEFAULT_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/131.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
 }
 
 
@@ -127,8 +135,12 @@ class ImageScraper:
         if len(self.crawl_events) > 2000:
             self.crawl_events = self.crawl_events[-1500:]
 
-    def _extract_raw_data(self, soup: BeautifulSoup, page_url: str, html: str):
+    def _extract_raw_data(self, soup: BeautifulSoup, page_url: str, html: str,
+                          status_code: int = 200, response_headers: dict = None):
         """Extract structured raw data from a page for the Raw Data panel."""
+        if response_headers is None:
+            response_headers = {}
+
         # Title
         title_tag = soup.find("title")
         title = title_tag.get_text(strip=True) if title_tag else ""
@@ -165,6 +177,8 @@ class ImageScraper:
         self.raw_pages[page_url] = {
             "url": page_url,
             "title": title,
+            "status_code": status_code,
+            "response_headers": response_headers,
             "meta_tags": metas[:30],
             "links": all_links[:150],
             "scripts": scripts[:30],
@@ -579,21 +593,32 @@ class ImageScraper:
 
     async def _fetch_page(
         self, session: aiohttp.ClientSession, url: str
-    ) -> Optional[str]:
+    ) -> dict:
+        """Fetch a page. Returns dict with keys: html, status, headers, error."""
+        result = {"html": None, "status": 0, "headers": {}, "error": ""}
         try:
             timeout = aiohttp.ClientTimeout(total=self.config.request_timeout)
             async with session.get(
                 url, timeout=timeout, headers=DEFAULT_HEADERS, ssl=False,
                 allow_redirects=True,
             ) as resp:
+                result["status"] = resp.status
+                result["headers"] = dict(resp.headers)
                 if resp.status != 200:
-                    return None
+                    result["error"] = f"HTTP {resp.status}"
+                    return result
                 content_type = resp.headers.get("content-type", "")
                 if "text/html" not in content_type and "application/xhtml" not in content_type:
-                    return None
-                return await resp.text(errors="replace")
-        except Exception:
-            return None
+                    result["error"] = f"Not HTML: {content_type}"
+                    return result
+                result["html"] = await resp.text(errors="replace")
+                return result
+        except asyncio.TimeoutError:
+            result["error"] = "Timeout"
+            return result
+        except Exception as e:
+            result["error"] = str(e)[:120]
+            return result
 
     async def _get_image_info(
         self, session: aiohttp.ClientSession, url: str
@@ -645,18 +670,39 @@ class ImageScraper:
         self.progress.message = f"Scraping: {url}"
         await self._emit_progress()
 
-        self._log(f"→ Fetching: {url}")
-        html = await self._fetch_page(session, url)
+        self._log(f"\u2192 Fetching: {url}")
+        fetch_result = await self._fetch_page(session, url)
+        resp_status = fetch_result["status"]
+        resp_headers = fetch_result["headers"]
+        html = fetch_result["html"]
+
         if html is None:
-            self._log(f"✗ Failed to fetch: {url}")
+            err_reason = fetch_result["error"] or "Unknown error"
+            self._log(f"\u2717 Failed to fetch: {url} \u2014 {err_reason}")
             if node:
                 node.status = "error"
+            # Record raw data even for failures so the Raw Data tab shows something
+            self.raw_pages[url] = {
+                "url": url,
+                "title": "",
+                "status_code": resp_status,
+                "error": err_reason,
+                "response_headers": resp_headers,
+                "meta_tags": [], "links": [], "scripts": [],
+                "stylesheets": [], "img_tag_count": 0,
+                "html_length": 0, "html_snippet": "",
+            }
+            self._add_event("error", {
+                "url": url, "depth": depth,
+                "status": resp_status,
+                "reason": err_reason,
+            })
             return
 
         soup = BeautifulSoup(html, "lxml")
 
-        # Extract raw page data
-        self._extract_raw_data(soup, url, html)
+        # Extract raw page data (includes response headers now)
+        self._extract_raw_data(soup, url, html, resp_status, resp_headers)
 
         # Extract images
         images_before = len(self.images)

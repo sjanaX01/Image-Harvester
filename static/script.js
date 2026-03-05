@@ -795,17 +795,47 @@ function renderRawPage(url) {
 
     const intLinks = (data.links || []).filter(l => l.internal);
     const extLinks = (data.links || []).filter(l => !l.internal);
+    const respHeaders = data.response_headers || {};
+    const headerKeys = Object.keys(respHeaders);
+    const statusCode = data.status_code || 0;
+    const hasError = data.error || (statusCode && statusCode !== 200);
 
-    let h = `
+    let h = '';
+
+    // Error banner
+    if (hasError) {
+        h += `<div class="raw-section" style="border-color:#b03020">
+            <div class="raw-section-title" style="color:#b03020;background:rgba(176,48,32,0.06)">\u26a0 Error</div>
+            <div class="raw-meta-grid">
+                <div class="raw-kv"><span class="raw-k">Status</span><span class="raw-v" style="color:#b03020">HTTP ${statusCode || 'N/A'}</span></div>
+                <div class="raw-kv"><span class="raw-k">Reason</span><span class="raw-v">${esc(data.error || 'Unknown')}</span></div>
+            </div>
+        </div>`;
+    }
+
+    h += `
     <div class="raw-section">
         <div class="raw-section-title">\ud83d\udcc4 Page Info</div>
         <div class="raw-meta-grid">
             <div class="raw-kv"><span class="raw-k">URL</span><span class="raw-v raw-v-url">${esc(data.url)}</span></div>
+            <div class="raw-kv"><span class="raw-k">Status</span><span class="raw-v">${statusCode || '\u2014'}</span></div>
             <div class="raw-kv"><span class="raw-k">Title</span><span class="raw-v">${esc(data.title || '\u2014')}</span></div>
             <div class="raw-kv"><span class="raw-k">HTML Size</span><span class="raw-v">${(data.html_length || 0).toLocaleString()} bytes</span></div>
             <div class="raw-kv"><span class="raw-k">Image Tags</span><span class="raw-v">${data.img_tag_count || 0}</span></div>
         </div>
-    </div>
+    </div>`;
+
+    // Response Headers
+    if (headerKeys.length > 0) {
+        h += `<div class="raw-section">
+            <div class="raw-section-title">\ud83d\udce1 Response Headers <span class="raw-badge">${headerKeys.length}</span></div>
+            <div class="raw-link-list">${headerKeys.map(k =>
+            `<div class="raw-link-row"><span class="raw-k" style="min-width:140px">${esc(k)}</span><span class="raw-v">${esc(String(respHeaders[k]).substring(0, 200))}</span></div>`
+        ).join('')}</div>
+        </div>`;
+    }
+
+    h += `
     <div class="raw-section">
         <div class="raw-section-title">\ud83d\udd17 Internal Links <span class="raw-badge">${intLinks.length}</span></div>
         <div class="raw-link-list">${intLinks.slice(0, 50).map(l =>
@@ -835,11 +865,15 @@ function renderRawPage(url) {
         <div class="raw-link-list">${(data.stylesheets || []).map(s =>
         `<div class="raw-link-row"><a class="raw-link-href" href="${esc(s)}" target="_blank">${esc(s)}</a></div>`
     ).join('') || '<div class="raw-empty-sub">None found</div>'}</div>
-    </div>
-    <div class="raw-section">
-        <div class="raw-section-title">&lt;/&gt; HTML Snippet</div>
-        <pre class="raw-html-snippet">${esc((data.html_snippet || '').substring(0, 1500))}</pre>
     </div>`;
+
+    if (data.html_snippet) {
+        h += `<div class="raw-section">
+            <div class="raw-section-title">&lt;/&gt; HTML Snippet</div>
+            <pre class="raw-html-snippet">${esc(data.html_snippet.substring(0, 1500))}</pre>
+        </div>`;
+    }
+
     view.innerHTML = h;
 }
 
@@ -875,6 +909,9 @@ function renderRawLive() {
                 `<div class="raw-link-list" style="margin-top:4px">${(ev.links || []).slice(0, 5).map(l =>
                     `<div class="raw-link-row"><a class="raw-link-href" href="${esc(l)}" target="_blank">${esc(truncUrl(l))}</a></div>`
                 ).join('')}</div>`;
+        } else if (ev.type === 'error') {
+            detail = `<span class="raw-v-url">${esc(ev.url || '')}</span>` +
+                `<span class="raw-v" style="color:#b03020">HTTP ${ev.status || '?'} \u2014 ${esc(ev.reason || 'Unknown')}</span>`;
         } else {
             detail = `<span class="raw-v">${esc(JSON.stringify(ev).substring(0, 120))}</span>`;
         }

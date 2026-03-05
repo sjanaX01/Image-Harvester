@@ -1272,7 +1272,6 @@ input:focus {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    padding: 20px 20px 0;
 }
 
 .rawdata-content {
