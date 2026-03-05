@@ -924,7 +924,7 @@ class ImageScraper:
                     async with session.get(
                         img.url, timeout=timeout, ssl=False,
                     ) as resp:
-                        if resp.status != 200:
+                        if not (200 <= resp.status < 300):
                             continue
                         data = await resp.read()
 

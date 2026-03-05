@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from scraper import ImageScraper, ScrapeConfig
+from scraper import ImageScraper, ScrapeConfig, DEFAULT_HEADERS
 
 app = FastAPI(title="ImageHarvest")
 
@@ -152,7 +152,8 @@ async def download_zip(job_id: str):
         return JSONResponse({"error": "No images to download"}, status_code=404)
 
     scraper = job["scraper"]
-    async with aiohttp.ClientSession() as session:
+    dl_headers = {**DEFAULT_HEADERS, "Accept": "image/webp,image/apng,image/*,*/*;q=0.8"}
+    async with aiohttp.ClientSession(headers=dl_headers) as session:
         buf = await scraper.download_images_zip(session)
 
     domain = scraper.base_domain.replace(".", "_")
@@ -177,7 +178,8 @@ async def download_selected(job_id: str, request: Request):
         return JSONResponse({"error": "No images selected"}, status_code=400)
 
     scraper = job["scraper"]
-    async with aiohttp.ClientSession() as session:
+    dl_headers = {**DEFAULT_HEADERS, "Accept": "image/webp,image/apng,image/*,*/*;q=0.8"}
+    async with aiohttp.ClientSession(headers=dl_headers) as session:
         buf = await scraper.download_images_zip(session, selected_urls=selected)
 
     domain = scraper.base_domain.replace(".", "_")
